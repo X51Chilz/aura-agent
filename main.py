@@ -49,14 +49,21 @@ async def whatsapp_webhook(request: Request):
         # Send the draft response
         draft = thread.get('draft_response')
         if draft:
-            gmail_service.send_email(
-                to=thread['sender'],
-                subject=f"Re: {thread['subject']}",
-                body=draft
-            )
-            gmail_service.mark_as_read(email_id)
-            db.update_status(email_id, "SENT")
-            whatsapp_service.send_message(from_number, "✅ Email sent successfully!")
+            try:
+                gmail_service.send_email(
+                    to=thread['sender'],
+                    subject=f"Re: {thread['subject']}",
+                    body=draft
+                )
+                gmail_service.mark_as_read(email_id)
+                db.update_status(email_id, "SENT")
+                whatsapp_service.send_message(from_number, "✅ Email sent successfully!")
+                print(f"✅ Email sent to {thread['sender']}")
+            except Exception as send_error:
+                print(f"❌ Error sending email: {send_error}")
+                import traceback
+                traceback.print_exc()
+                whatsapp_service.send_message(from_number, f"❌ Error sending email: {str(send_error)}")
         else:
             whatsapp_service.send_message(from_number, "No draft response available. Please provide instructions first.")
     
@@ -133,8 +140,14 @@ Summary:
 ---
 Reply with instructions on how to respond."""
                 
-                whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)
-                print(f"Notified supervisor about email: {email_id}")
+                try:
+                    whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)
+                    print(f"✅ Notified supervisor about email: {email_id}")
+                except Exception as whatsapp_error:
+                    print(f"❌ Failed to send WhatsApp notification: {whatsapp_error}")
+                    print(f"Supervisor number: {SUPERVISOR_WHATSAPP}")
+                    import traceback
+                    traceback.print_exc()
             
             # Check every 60 seconds
             time.sleep(60)

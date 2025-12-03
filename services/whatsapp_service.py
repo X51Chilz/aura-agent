@@ -11,9 +11,15 @@ class WhatsAppService:
     
     def send_message(self, to_number, message):
         """Send a WhatsApp message to the supervisor"""
-        # Ensure the to_number has whatsapp: prefix
-        if not to_number.startswith("whatsapp:"):
-            to_number = f"whatsapp:{to_number}"
+        # Ensure the to_number has whatsapp: prefix and + sign
+        # Remove any existing whatsapp: prefix first
+        clean_number = to_number.replace("whatsapp:", "").strip()
+        
+        # Ensure it starts with +
+        if not clean_number.startswith("+"):
+            clean_number = f"+{clean_number}"
+        
+        to_number = f"whatsapp:{clean_number}"
         
         message = self.client.messages.create(
             from_=self.from_number,

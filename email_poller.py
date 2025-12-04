@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""
+Standalone email poller that runs independently from the web server.
+Checks Gmail every 60 seconds and sends WhatsApp notifications.
+"""
+import os
+import time
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import services
+from services.gmail_service import GmailService
+from services.ai_service import AIService
+from services.whatsapp_service import WhatsAppService
+from utils.db import Database
+
+# Initialize services
+print("🚀 Initializing Aura Agent Email Poller...")
+gmail_service = GmailService()
+ai_service = AIService()
+whatsapp_service = WhatsAppService()
+db = Database()
+
+SUPERVISOR_WHATSAPP = os.getenv("SUPERVISOR_WHATSAPP")
+
+print(f"✅ Services initialized. Supervisor: {SUPERVISOR_WHATSAPP}")
+print("📧 Starting email polling loop...")
+
+while True:
+    try:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Checking for new emails...")
+        unread_emails = gmail_service.list_unread_emails()
+        
+        for email_msg in unread_emails:
+            email_id = email_msg['id']
+            
+            # Check if we've already processed this email
+            existing_thread = db.get_thread_by_email_id(email_id)
+            if existing_thread:
+                continue
+            
+            # Get email content
+            email_content = gmail_service.get_email_content(email_id)
+            
+            # Summarize with AI
+            summary = ai_service.summarize_email(
+                email_content['subject'],
+                email_content['sender'],
+                email_content['body']
+            )
+            
+            # Store in database
+            db.create_thread(
+                email_id=email_id,
+                sender=email_content['sender'],
+                subject=email_content['subject'],
+                body=email_content['body'],
+                summary=summary
+            )
+            
+            # Notify supervisor via WhatsApp
+            notification = f"""📨 New Email Received!
+
+From: {email_content['sender']}
+Subject: {email_content['subject']}
+
+Summary:
+{summary}
+
+---
+Reply with instructions on how to respond."""
+            
+            try:
+                whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)
+                print(f"✅ Notified supervisor about email: {email_id}")
+            except Exception as whatsapp_error:
+                print(f"❌ Failed to send WhatsApp notification: {whatsapp_error}")
+                print(f"Supervisor number: {SUPERVISOR_WHATSAPP}")
+                import traceback
+                traceback.print_exc()
+        
+        # Check every 60 seconds
+        time.sleep(60)
+        
+    except Exception as e:
+        print(f"❌ Error checking emails: {e}")
+        import traceback
+        traceback.print_exc()
+        time.sleep(60)

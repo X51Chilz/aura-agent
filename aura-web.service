@@ -1,0 +1,15 @@
+[Unit]
+Description=Aura Agent Web Server
+After=network.target
+
+[Service]
+Type=simple
+User=peter
+WorkingDirectory=/home/peter/aura_agent
+Environment="PATH=/home/peter/aura_agent/venv/bin:/usr/bin"
+ExecStart=/home/peter/aura_agent/venv/bin/python3 /home/peter/aura_agent/main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

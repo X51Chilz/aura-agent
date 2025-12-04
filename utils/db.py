@@ -23,29 +23,48 @@ class Database:
                 status TEXT DEFAULT 'PENDING_REVIEW',
                 conversation_history TEXT,
                 draft_response TEXT,
+                message_id TEXT,
+                email_references TEXT,
+                thread_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
+        # Add new columns if they don't exist (for existing databases)
+        try:
+            cursor.execute('ALTER TABLE email_threads ADD COLUMN message_id TEXT')
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+        
+        try:
+            cursor.execute('ALTER TABLE email_threads ADD COLUMN email_references TEXT')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            cursor.execute('ALTER TABLE email_threads ADD COLUMN thread_id TEXT')
+        except sqlite3.OperationalError:
+            pass
+        
         conn.commit()
         conn.close()
     
-    def create_thread(self, email_id, sender, subject, body, summary):
+    def create_thread(self, email_id, sender, subject, body, summary, message_id=None, references=None, thread_id=None):
         """Create a new email thread"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         cursor.execute('''
-            INSERT INTO email_threads (email_id, sender, subject, body, summary, conversation_history)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (email_id, sender, subject, body, summary, json.dumps([])))
+            INSERT INTO email_threads (email_id, sender, subject, body, summary, conversation_history, message_id, email_references, thread_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (email_id, sender, subject, body, summary, json.dumps([]), message_id, references, thread_id))
         
-        thread_id = cursor.lastrowid
+        thread_db_id = cursor.lastrowid
         conn.commit()
         conn.close()
         
-        return thread_id
+        return thread_db_id
     
     def get_thread_by_email_id(self, email_id):
         """Get thread by email ID"""

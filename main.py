@@ -53,7 +53,10 @@ async def whatsapp_webhook(request: Request):
                 gmail_service.send_email(
                     to=thread['sender'],
                     subject=f"Re: {thread['subject']}",
-                    body=draft
+                    body=draft,
+                    in_reply_to=thread.get('message_id'),
+                    references=thread.get('email_references'),
+                    thread_id=thread.get('thread_id')
                 )
                 gmail_service.mark_as_read(email_id)
                 db.update_status(email_id, "SENT")
@@ -119,13 +122,16 @@ def check_new_emails():
                     email_content['body']
                 )
                 
-                # Store in database
+                # Store in database with threading headers
                 db.create_thread(
                     email_id=email_id,
                     sender=email_content['sender'],
                     subject=email_content['subject'],
                     body=email_content['body'],
-                    summary=summary
+                    summary=summary,
+                    message_id=email_content.get('message_id'),
+                    references=email_content.get('references'),
+                    thread_id=email_msg.get('threadId')
                 )
                 
                 # Notify supervisor via WhatsApp

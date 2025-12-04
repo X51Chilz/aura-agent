@@ -70,6 +70,10 @@ class GmailService:
         subject = next(h['value'] for h in headers if h['name'] == 'Subject')
         sender = next(h['value'] for h in headers if h['name'] == 'From')
         
+        # Extract threading headers for proper email replies
+        message_id = next((h['value'] for h in headers if h['name'] == 'Message-ID'), None)
+        references = next((h['value'] for h in headers if h['name'] == 'References'), None)
+        
         parts = payload.get('parts')
         body = ""
         if parts:
@@ -86,16 +90,37 @@ class GmailService:
             "id": msg_id,
             "subject": subject,
             "sender": sender,
-            "body": body
+            "body": body,
+            "message_id": message_id,
+            "references": references
         }
 
-    def send_email(self, to, subject, body):
+    def send_email(self, to, subject, body, in_reply_to=None, references=None, thread_id=None):
         message = MIMEText(body)
         message['to'] = to
         message['subject'] = subject
+        
+        # Add threading headers for proper email replies
+        if in_reply_to:
+            message['In-Reply-To'] = in_reply_to
+        
+        if references:
+            # Append the in_reply_to to references if it exists
+            if in_reply_to:
+                message['References'] = f"{references} {in_reply_to}" if references else in_reply_to
+            else:
+                message['References'] = references
+        elif in_reply_to:
+            message['References'] = in_reply_to
+        
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        message = {'raw': raw}
-        self.service.users().messages().send(userId='me', body=message).execute()
+        
+        # Include threadId if provided to keep it in the same conversation
+        send_body = {'raw': raw}
+        if thread_id:
+            send_body['threadId'] = thread_id
+        
+        self.service.users().messages().send(userId='me', body=send_body).execute()
 
     def mark_as_read(self, msg_id):
         self.service.users().messages().modify(userId='me', id=msg_id, body={'removeLabelIds': ['UNREAD']}).execute()

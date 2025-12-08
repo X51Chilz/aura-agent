@@ -61,16 +61,15 @@ while True:
             )
             
             # Notify supervisor via WhatsApp
-            notification = f"""📨 New Email Received!
+            notification = f"""📨 New Email
 
 From: {email_content['sender']}
 Subject: {email_content['subject']}
 
-Summary:
 {summary}
 
 ---
-Reply with instructions on how to respond."""
+Reply with instructions."""
             
             try:
                 whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)

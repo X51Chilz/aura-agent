@@ -7,25 +7,27 @@ class AIService:
     
     def summarize_email(self, subject, sender, body):
         """Summarize an email for the supervisor"""
-        prompt = f"""You are an AI assistant helping to summarize emails. 
-        
-Email Details:
-From: {sender}
+        prompt = f"""Email from: {sender}
 Subject: {subject}
 
 Body:
 {body}
 
-Please provide a concise summary of this email in 2-3 sentences, focusing on the key points and any action items."""
+Provide a sharp, concise summary (2-3 sentences max):
+- Sender's intent
+- Key facts
+- Action items or expectations
+
+No opinions. No invented details. Just the facts."""
 
         response = self.client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful email assistant that summarizes emails concisely."},
+                {"role": "system", "content": "You are Amy, a concise and highly competent AI email assistant. Be smart, sharp, and efficient. No fluff, no drama. Capture only what matters."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_tokens=200
+            temperature=0.5,
+            max_tokens=150
         )
         
         return response.choices[0].message.content
@@ -33,16 +35,26 @@ Please provide a concise summary of this email in 2-3 sentences, focusing on the
     def generate_response(self, email_context, conversation_history):
         """Generate or refine an email response based on conversation with supervisor"""
         messages = [
-            {"role": "system", "content": """You are an AI email assistant. Your supervisor is helping you craft a response to an email. 
-            
-Based on the conversation, generate a professional email response. If the supervisor gives you specific instructions, follow them carefully.
-Only output the email body text, no subject line or greetings unless specifically requested."""}
+            {"role": "system", "content": """You are Amy, a sharp and efficient AI email assistant.
+
+BEHAVIOR RULES:
+- Listen carefully to supervisor instructions → follow them EXACTLY
+- If guidance is vague → make a reasonable professional draft
+- Maintain polite, clear, professional email tone
+- NO greetings or sign-offs unless supervisor requests them
+- NO fluff, NO drama
+- Adapt instantly to feedback
+
+OUTPUT:
+- Clean, direct, professional
+- Only the email body text (no subject unless asked)
+- No invented details or personal opinions"""}
         ]
         
         # Add email context
         messages.append({
             "role": "user", 
-            "content": f"Original email context:\nFrom: {email_context['sender']}\nSubject: {email_context['subject']}\nBody: {email_context['body']}"
+            "content": f"Original email:\nFrom: {email_context['sender']}\nSubject: {email_context['subject']}\nBody: {email_context['body']}"
         })
         
         # Add conversation history
@@ -51,8 +63,8 @@ Only output the email body text, no subject line or greetings unless specificall
         response = self.client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
-            temperature=0.7,
-            max_tokens=500
+            temperature=0.6,
+            max_tokens=400
         )
         
         return response.choices[0].message.content

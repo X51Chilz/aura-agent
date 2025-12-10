@@ -60,8 +60,26 @@ while True:
                 summary=summary
             )
             
-            # Notify supervisor via WhatsApp
-            notification = f"""📨 New Email
+            
+            # Notify supervisor via WhatsApp using template
+            template_sid = os.getenv("WHATSAPP_TEMPLATE_SID")
+            
+            try:
+                if template_sid:
+                    # Use approved template (production-ready)
+                    whatsapp_service.send_template_message(
+                        SUPERVISOR_WHATSAPP,
+                        template_sid,
+                        [
+                            email_content['sender'],      # {{1}}
+                            email_content['subject'],     # {{2}}
+                            summary                        # {{3}}
+                        ]
+                    )
+                    print(f"✅ Sent template notification to supervisor: {email_id}")
+                else:
+                    # Fallback to freeform message (requires 24hr window)
+                    notification = f"""📨 New Email
 
 From: {email_content['sender']}
 Subject: {email_content['subject']}
@@ -70,10 +88,9 @@ Subject: {email_content['subject']}
 
 ---
 Reply with instructions."""
-            
-            try:
-                whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)
-                print(f"✅ Notified supervisor about email: {email_id}")
+                    
+                    whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)
+                    print(f"✅ Sent freeform notification to supervisor: {email_id}")
             except Exception as whatsapp_error:
                 print(f"❌ Failed to send WhatsApp notification: {whatsapp_error}")
                 print(f"Supervisor number: {SUPERVISOR_WHATSAPP}")

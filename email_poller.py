@@ -1,11 +1,16 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 -u
 """
 Standalone email poller that runs independently from the web server.
 Checks Gmail every 60 seconds and sends WhatsApp notifications.
 """
 import os
+import sys
 import time
 from dotenv import load_dotenv
+
+# Force unbuffered output for systemd logging
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
 # Load environment variables
 load_dotenv()

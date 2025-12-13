@@ -62,7 +62,10 @@ while True:
                 sender=email_content['sender'],
                 subject=email_content['subject'],
                 body=email_content['body'],
-                summary=summary
+                summary=summary,
+                message_id=email_content.get('message_id'),
+                references=email_content.get('references'),
+                thread_id=email_msg.get('threadId')
             )
             
             

@@ -86,7 +86,7 @@ class Database:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
-        cursor.execute('SELECT * FROM email_threads WHERE status = "PENDING_REVIEW"')
+        cursor.execute('SELECT * FROM email_threads WHERE status = "PENDING_REVIEW" ORDER BY id DESC')
         rows = cursor.fetchall()
         conn.close()
         

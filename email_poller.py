@@ -95,7 +95,13 @@ Subject: {email_content['subject']}
 Reply with instructions."""
                     
                     whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)
-                    print(f"✅ Sent freeform notification to supervisor: {email_id}")
+                print(f"✅ Sent WhatsApp notification: {email_id}")
+                
+                # Mark as read in Gmail so it doesn't clutter inbox
+                # (Poller relies on DB check to avoid duplicates)
+                gmail_service.mark_as_read(email_id)
+                print(f"✅ Marked email as read: {email_id}")
+                
             except Exception as whatsapp_error:
                 print(f"❌ Failed to send WhatsApp notification: {whatsapp_error}")
                 print(f"Supervisor number: {SUPERVISOR_WHATSAPP}")

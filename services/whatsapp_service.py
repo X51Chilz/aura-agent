@@ -45,14 +45,15 @@ class WhatsAppService:
         
         to_number = f"whatsapp:{clean_number}"
         
-        # Build content variables for template
+        # Build content variables for template as JSON string
+        import json
         content_variables = {str(i+1): var for i, var in enumerate(variables)}
         
         message = self.client.messages.create(
             from_=self.from_number,
             to=to_number,
             content_sid=template_name,
-            content_variables=content_variables
+            content_variables=json.dumps(content_variables)
         )
         
         return message.sid

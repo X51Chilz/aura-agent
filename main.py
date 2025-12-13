@@ -97,78 +97,13 @@ async def whatsapp_webhook(request: Request):
     
     return {"status": "ok"}
 
-def check_new_emails():
-    """Background task to check for new emails"""
-    while True:
-        try:
-            print("Checking for new emails...")
-            unread_emails = gmail_service.list_unread_emails()
-            
-            for email_msg in unread_emails:
-                email_id = email_msg['id']
-                
-                # Check if we've already processed this email
-                existing_thread = db.get_thread_by_email_id(email_id)
-                if existing_thread:
-                    continue
-                
-                # Get email content
-                email_content = gmail_service.get_email_content(email_id)
-                
-                # Summarize with AI
-                summary = ai_service.summarize_email(
-                    email_content['subject'],
-                    email_content['sender'],
-                    email_content['body']
-                )
-                
-                # Store in database with threading headers
-                db.create_thread(
-                    email_id=email_id,
-                    sender=email_content['sender'],
-                    subject=email_content['subject'],
-                    body=email_content['body'],
-                    summary=summary,
-                    message_id=email_content.get('message_id'),
-                    references=email_content.get('references'),
-                    thread_id=email_msg.get('threadId')
-                )
-                
-                # Notify supervisor via WhatsApp
-                notification = f"""📨 New Email Received!
+@app.get("/")
+async def root():
+    return {"status": "Aura Agent is running"}
 
-From: {email_content['sender']}
-Subject: {email_content['subject']}
-
-Summary:
-{summary}
-
----
-Reply with instructions on how to respond."""
-                
-                try:
-                    whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)
-                    print(f"✅ Notified supervisor about email: {email_id}")
-                except Exception as whatsapp_error:
-                    print(f"❌ Failed to send WhatsApp notification: {whatsapp_error}")
-                    print(f"Supervisor number: {SUPERVISOR_WHATSAPP}")
-                    import traceback
-                    traceback.print_exc()
-            
-            # Check every 60 seconds
-            time.sleep(60)
-            
-        except Exception as e:
-            print(f"Error checking emails: {e}")
-            time.sleep(60)
-
-@app.on_event("startup")
-async def startup_event():
-    """Start background email checking on startup"""
-    import threading
-    email_thread = threading.Thread(target=check_new_emails, daemon=True)
-    email_thread.start()
-    print("Email checking thread started")
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
 
 @app.get("/")
 async def root():

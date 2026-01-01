@@ -91,7 +91,9 @@ RESPONSE PATTERNS:
 OUTPUT:
 - Clean, direct, professional
 - Only the email body text (no subject unless asked)
-- No invented details or personal opinions"""}
+- No invented details or personal opinions
+- FORMATTING: Use double line breaks (\n\n) between paragraphs. Do not write one giant block of text.
+- Structure multiple points or questions heavily for readability."""}
         ]
         
         # Add email context

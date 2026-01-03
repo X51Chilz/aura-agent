@@ -75,13 +75,24 @@ while True:
             try:
                 if template_sid:
                     # Use approved template (production-ready)
+                    
+                    # Sanitize variables to prevent WhatsApp Template Error 63005
+                    # 1. Clean Sender: Remove < > and truncate
+                    clean_sender = email_content['sender'].replace('<', '(').replace('>', ')').replace('\n', ' ').strip()[:50]
+                    
+                    # 2. Clean Subject: Remove newlines and truncate
+                    clean_subject = email_content['subject'].replace('\n', ' ').strip()[:50]
+                    
+                    # 3. Clean Summary: Ensure it's not too long (1000 chars safety limit)
+                    clean_summary = summary[:1000]
+                    
                     whatsapp_service.send_template_message(
                         SUPERVISOR_WHATSAPP,
                         template_sid,
                         [
-                            email_content['sender'],      # {{1}}
-                            email_content['subject'],     # {{2}}
-                            summary                        # {{3}}
+                            clean_sender,      # {{1}}
+                            clean_subject,     # {{2}}
+                            clean_summary      # {{3}}
                         ]
                     )
                     print(f"✅ Sent template notification to supervisor: {email_id}")

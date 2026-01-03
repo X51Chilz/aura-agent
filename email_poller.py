@@ -77,10 +77,13 @@ while True:
                     # Use approved template (production-ready)
                     
                     # Sanitize variables to prevent WhatsApp Template Error 63005
-                    # 1. Clean Sender: Remove < > and truncate
-                    clean_sender = email_content['sender'].replace('<', '(').replace('>', ')').replace('\n', ' ').strip()[:50]
+                    # 1. Clean Sender: Extract ONLY the name, remove email address part
+                    # "Peter Mares <email>" -> "Peter Mares"
+                    clean_sender = email_content['sender'].split('<')[0].strip()[:50]
+                    # Fallback: remove non-alphanumeric except space
+                    clean_sender = "".join([c for c in clean_sender if c.isalnum() or c.isspace()])
                     
-                    # 2. Clean Subject: Remove newlines and truncate
+                    # 2. Clean Subject: Remove newlines, allow only safe chars
                     clean_subject = email_content['subject'].replace('\n', ' ').strip()[:50]
                     
                     # 3. Clean Summary: Ensure it's not too long (1000 chars safety limit)

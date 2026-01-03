@@ -73,36 +73,46 @@ while True:
             template_sid = os.getenv("WHATSAPP_TEMPLATE_SID")
             
             try:
+                # FIRST ATTEMPT: Send using Template
                 if template_sid:
-                    # Use approved template (production-ready)
-                    
-                    # Sanitize variables to prevent WhatsApp Template Error 63005
-                    # 1. Clean Sender: Extract ONLY the name, remove email address part
-                    # "Peter Mares <email>" -> "Peter Mares"
-                    clean_sender = email_content['sender'].split('<')[0].strip()[:50]
-                    # Fallback: remove non-alphanumeric except space
-                    clean_sender = "".join([c for c in clean_sender if c.isalnum() or c.isspace()])
-                    
-                    # 2. Clean Subject: Remove newlines, allow only safe chars
-                    clean_subject = email_content['subject'].replace('\n', ' ').strip()[:50]
-                    
-                    # 3. Clean Summary: Ensure it's not too long (1000 chars safety limit)
-                    clean_summary = summary[:1000]
-                    
-                    whatsapp_service.send_template_message(
-                        SUPERVISOR_WHATSAPP,
-                        template_sid,
-                        [
-                            clean_sender,      # {{1}}
-                            clean_subject,     # {{2}}
-                            clean_summary      # {{3}}
-                        ]
-                    )
-                    print(f"✅ Sent template notification to supervisor: {email_id}")
-                else:
-                    # Fallback to freeform message (requires 24hr window)
-                    notification = f"""📨 New Email
+                    try:
+                        # Sanitize variables to prevent WhatsApp Template Error 63005
+                        # 1. Clean Sender: Extract ONLY the name, remove email address part
+                        clean_sender = email_content['sender'].split('<')[0].strip()[:30] # Limit to 30 chars
+                        
+                        # 2. Clean Subject: Remove newlines, allow only safe chars
+                        clean_subject = email_content['subject'].replace('\n', ' ').strip()[:30] # Limit to 30 chars
+                        
+                        # 3. Clean Summary: Ensure it's not too long (limit to 200 chars for safety)
+                        clean_summary = summary[:200] 
+                        
+                        whatsapp_service.send_template_message(
+                            SUPERVISOR_WHATSAPP,
+                            template_sid,
+                            [
+                                clean_sender,      # {{1}}
+                                clean_subject,     # {{2}}
+                                clean_summary      # {{3}}
+                            ]
+                        )
+                        print(f"✅ Sent template notification to supervisor: {email_id}")
+                        
+                    except Exception as template_error:
+                        print(f"⚠️ Template failed ({template_error}), falling back to text message...")
+                        # FALLBACK: Send as standard text message
+                        notification = f"""📨 New Email from {clean_sender}
+Subject: {clean_subject}
 
+{summary}
+
+---
+Reply with instructions."""
+                        whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)
+                        print(f"✅ Sent fallback WhatsApp notification: {email_id}")
+                
+                else:
+                    # No template configured, use standard text
+                    notification = f"""📨 New Email
 From: {email_content['sender']}
 Subject: {email_content['subject']}
 
@@ -112,16 +122,14 @@ Subject: {email_content['subject']}
 Reply with instructions."""
                     
                     whatsapp_service.send_message(SUPERVISOR_WHATSAPP, notification)
-                print(f"✅ Sent WhatsApp notification: {email_id}")
+                    print(f"✅ Sent WhatsApp notification: {email_id}")
                 
-                # Mark as read in Gmail so it doesn't clutter inbox
-                # (Poller relies on DB check to avoid duplicates)
+                # Mark as read in Gmail
                 gmail_service.mark_as_read(email_id)
                 print(f"✅ Marked email as read: {email_id}")
                 
             except Exception as whatsapp_error:
                 print(f"❌ Failed to send WhatsApp notification: {whatsapp_error}")
-                print(f"Supervisor number: {SUPERVISOR_WHATSAPP}")
                 import traceback
                 traceback.print_exc()
         

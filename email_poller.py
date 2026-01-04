@@ -77,20 +77,15 @@ while True:
                 if template_sid:
                     try:
                         # Sanitize variables to prevent WhatsApp Template Error 63005
-                        # 1. Clean Sender: Extract PURE EMAIL ADDRESS to match sample format
-                        # "Peter Mares <email>" -> "email"
-                        import re
-                        email_match = re.search(r'<(.+)>', email_content['sender'])
-                        if email_match:
-                            clean_sender = email_match.group(1).strip()
-                        else:
-                            clean_sender = email_content['sender'].strip()
+                        # 1. Clean Sender: Revert to standard safe formatting
+                        # "Peter Mares <email>" -> "Peter Mares <email>" (if valid chars)
+                        clean_sender = email_content['sender'].strip()[:50]
                             
                         # 2. Clean Subject: Remove newlines, allow only safe chars
                         clean_subject = email_content['subject'].replace('\n', ' ').strip()[:50]
                         
-                        # 3. Clean Summary: Remove NEWLINES to match "Text" variable type
-                        clean_summary = summary.replace('\n', ' ').strip()[:500]
+                        # 3. Clean Summary: MUST remove newlines (Error 21656) but allowed longer length
+                        clean_summary = summary.replace('\n', ' ').strip()[:1000]
                         
                         whatsapp_service.send_template_message(
                             SUPERVISOR_WHATSAPP,

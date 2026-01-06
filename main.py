@@ -8,6 +8,12 @@ from services.ai_service import AIService
 from services.whatsapp_service import WhatsAppService
 from utils.db import Database
 
+import sys
+
+# Force unbuffered output for systemd logging
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
+
 load_dotenv()
 
 app = FastAPI()
@@ -22,13 +28,26 @@ db = Database()
 SUPERVISOR_WHATSAPP = os.getenv("SUPERVISOR_WHATSAPP")
 
 @app.post("/webhook/whatsapp")
+@app.post("/webhook/49b779dd-95a5-423b-8cbc-4daf91af44c8/webhook")
 async def whatsapp_webhook(request: Request):
     """Handle incoming WhatsApp messages from supervisor"""
+    # Log RAW request details for debugging
+    headers = dict(request.headers)
+    body = await request.body()
     form_data = await request.form()
     
     incoming_msg = form_data.get("Body", "").strip()
     from_number = form_data.get("From", "")
     
+    print(f"DEBUG: Webhook hit! Path: {request.url.path}")
+    print(f"DEBUG: Headers: {headers}")
+    print(f"DEBUG: Raw Body: {body.decode(errors='ignore')}")
+    print(f"DEBUG: Form Data: {dict(form_data)}")
+    
+    if not from_number:
+        print("⚠️ Received webhook with NO 'From' number. Likely a scanner or misconfigured proxy.")
+        return {"status": "error", "message": "Missing From number"}
+
     print(f"Received WhatsApp message: {incoming_msg} from {from_number}")
     
     # Get the most recent pending thread
@@ -52,95 +71,69 @@ async def whatsapp_webhook(request: Request):
     # Get conversation history
     conversation_history = db.get_conversation_history(email_id)
     
-    # Check if we have a draft
-    has_draft = thread.get('draft_response') is not None
-    
-    # Determine user's intent
+    # Get AI response (Single Brain)
     try:
-        intent = ai_service.determine_intent(incoming_msg, email_context, has_draft)
-        print(f"Detected intent: {intent}")
+        response = ai_service.get_response(incoming_msg, email_context, conversation_history)
+        print(f"DEBUG: AI Response: {response}")
     except Exception as e:
-        print(f"Error detecting intent: {e}")
-        intent = "DRAFT_REQUEST"  # Safe fallback
-    
-    # Route based on intent
-    if intent == "SEND_COMMAND":
-        # User wants to send the email
-        draft = thread.get('draft_response')
-        if draft:
+        print(f"❌ Error getting AI response: {e}")
+        whatsapp_service.send_message(from_number, "Sorry, I'm having trouble thinking right now. 🧠❌")
+        return {"status": "error"}
+
+    # Update conversation history with user message and AI response
+    conversation_history.append({"role": "user", "content": incoming_msg})
+    conversation_history.append({"role": "assistant", "content": response})
+    db.update_conversation(email_id, conversation_history)
+
+    # Check for SEND SIGNAL
+    if "[SIGNAL: SEND_EMAIL]" in response:
+        print("🚀 Send signal detected!")
+        # Clean the response for WhatsApp (remove the signal marker)
+        whatsapp_msg = response.replace("[SIGNAL: SEND_EMAIL]", "").strip()
+        
+        # Find the most recent draft in history
+        # We look through history (including the current response) for a --- block
+        draft_body = None
+        import re
+        
+        # Search backwards through messages starting from the current one
+        for msg in reversed(conversation_history):
+            content = msg['content']
+            # Find content between --- markers
+            # Matches --- followed by anything (non-greedy) followed by ---
+            match = re.search(r'---\s*(.*?)\s*---', content, re.DOTALL)
+            if match:
+                draft_body = match.group(1).strip()
+                break
+        
+        if draft_body:
             try:
                 gmail_service.send_email(
                     to=thread['sender'],
                     subject=f"Re: {thread['subject']}",
-                    body=draft,
+                    body=draft_body,
                     in_reply_to=thread.get('message_id'),
                     references=thread.get('email_references'),
                     thread_id=thread.get('thread_id')
                 )
                 gmail_service.mark_as_read(email_id)
                 db.update_status(email_id, "SENT")
-                whatsapp_service.send_message(from_number, "✅ Sent!")
-                print(f"✅ Email sent to {thread['sender']}")
+                db.update_draft_response(email_id, draft_body) # Keep track of what we sent
+                
+                # Send the AI's chat response (the "Done! Sent." part)
+                whatsapp_service.send_message(from_number, whatsapp_msg)
+                print(f"✅ Email sent successfully using draft: {draft_body[:50]}...")
             except Exception as send_error:
                 print(f"❌ Error sending email: {send_error}")
-                whatsapp_service.send_message(from_number, f"❌ Couldn't send: {str(send_error)}")
+                whatsapp_service.send_message(from_number, f"❌ I tried to send it, but hit an error: {str(send_error)}")
         else:
-            whatsapp_service.send_message(from_number, "No draft to send yet. Want me to write something first?")
-    
-    elif intent == "NO_RESPONSE":
-        # User doesn't want to respond to this email
-        try:
-            gmail_service.mark_as_read(email_id)
-            db.update_status(email_id, "NO_RESPONSE")
-            whatsapp_service.send_message(from_number, "Got it. Marked as handled, no response sent.")
-            print(f"✅ Email marked as no response needed: {email_id}")
-        except Exception as e:
-            print(f"❌ Error marking as no response: {e}")
-            whatsapp_service.send_message(from_number, "Okay, I'll skip this one.")
-    
-    elif intent == "QUESTION":
-        # User is asking about the email
-        try:
-            response = ai_service.chat_with_supervisor(incoming_msg, email_context, conversation_history)
-            
-            # Store conversation
-            conversation_history.append({"role": "user", "content": incoming_msg})
-            conversation_history.append({"role": "assistant", "content": response})
-            db.update_conversation(email_id, conversation_history)
-            
-            whatsapp_service.send_message(from_number, response)
-            print(f"✅ Answered question about email: {email_id}")
-        except Exception as e:
-            print(f"❌ Error in chat: {e}")
-            whatsapp_service.send_message(from_number, "Sorry, had trouble with that. Can you rephrase?")
-    
-    elif intent == "DRAFT_REQUEST" or intent == "REFINEMENT":
-        # User wants to create or refine a draft
-        try:
-            conversation_history.append({"role": "user", "content": incoming_msg})
-            
-            # Generate/refine draft
-            draft_response = ai_service.generate_response(email_context, conversation_history)
-            
-            # Store conversation and draft
-            conversation_history.append({"role": "assistant", "content": draft_response})
-            db.update_conversation(email_id, conversation_history)
-            db.update_draft_response(email_id, draft_response)
-            
-            # Send draft with natural language
-            if intent == "REFINEMENT":
-                response_text = f"How's this:\n\n{draft_response}\n\nBetter?"
-            else:
-                response_text = f"Here's what I'm thinking:\n\n{draft_response}\n\nWant me to adjust anything?"
-            
-            whatsapp_service.send_message(from_number, response_text)
-            print(f"✅ Generated draft for email: {email_id}")
-        except Exception as e:
-            print(f"❌ Error generating draft: {e}")
-            import traceback
-            traceback.print_exc()
-            whatsapp_service.send_message(from_number, f"Had trouble with that: {str(e)}")
-    
+            whatsapp_service.send_message(from_number, "I was ready to send, but I couldn't find the draft in our conversation. Can you show it to me again?")
+            print("⚠️ Send signal detected but no '---' block found in history.")
+    else:
+        # Just a normal conversation turn
+        whatsapp_service.send_message(from_number, response)
+        print(f"✅ Conversational reply sent to {from_number}")
+
     return {"status": "ok"}
 
 @app.get("/")
